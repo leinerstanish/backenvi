@@ -1,0 +1,710 @@
+service: prostore-back
+
+useDotenv: true
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-offline
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  environment:
+    JWT_SECRET: ${env:JWT_SECRET, 'default-secret-change-in-prod'}
+    JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
+    AWS_S3_BUCKET: ${env:AWS_S3_BUCKET, 'gnfls'}
+    AWS_S3_REGION: ${env:AWS_S3_REGION, 'us-east-2'}
+    S3_ACCESS_KEY_ID: ${env:AWS_ACCESS_KEY_ID, ''}
+    S3_SECRET_ACCESS_KEY: ${env:AWS_SECRET_ACCESS_KEY, ''}
+    RECEIPTS_BUCKET: ${env:RECEIPTS_BUCKET, 'envitienda-comprobantes-567764214813'}
+    RECEIPTS_REGION: ${env:RECEIPTS_REGION, 'us-east-2'}
+    RECEIPT_COMPANY_NAME: ${env:RECEIPT_COMPANY_NAME, 'Envi Tienda'}
+    RECEIPT_COMPANY_NIT: ${env:RECEIPT_COMPANY_NIT, ''}
+    MAIL_HOST: ${env:MAIL_HOST, 'smtp.gmail.com'}
+    MAIL_PORT: ${env:MAIL_PORT, '587'}
+    MAIL_USER: ${env:MAIL_USER, 'admin@envitienda.com'}
+    MAIL_PASS: ${env:MAIL_PASS, ''}
+    MAIL_FROM: ${env:MAIL_FROM, 'ENVI <admin@envitienda.com>'}
+    STORE_URL: ${env:STORE_URL, 'https://envitienda.com'}
+    SUPPORT_EMAIL: ${env:SUPPORT_EMAIL, 'admin@envitienda.com'}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:Query
+        - dynamodb:Scan
+      Resource: "arn:aws:dynamodb:${aws:region}:*:table/*"
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:DeleteObject
+      Resource: "arn:aws:s3:::${env:AWS_S3_BUCKET, 'gnfls'}/*"
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:GetObject
+      Resource: "arn:aws:s3:::envitienda-comprobantes-567764214813/*"
+
+functions:
+  # ═══════════════════════════════════════════════════════════
+  # AUTENTICACIÓN
+  # ═══════════════════════════════════════════════════════════
+
+  register:
+    handler: lambdas/auth/register.handler
+    events:
+      - http:
+          path: auth/register
+          method: post
+          cors: true
+
+  login:
+    handler: lambdas/auth/login.handler
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # USUARIOS
+  # ═══════════════════════════════════════════════════════════
+
+  userCreate:
+    handler: lambdas/users/createUser.handler
+    events:
+      - http:
+          path: users
+          method: post
+          cors: true
+
+  userGetAll:
+    handler: lambdas/users/getAllUsers.handler
+    events:
+      - http:
+          path: users
+          method: get
+          cors: true
+
+  userGetOne:
+    handler: lambdas/users/getUser.handler
+    events:
+      - http:
+          path: users/{userId}
+          method: get
+          cors: true
+
+  userUpdate:
+    handler: lambdas/users/updateUser.handler
+    events:
+      - http:
+          path: users/{userId}
+          method: put
+          cors: true
+
+  userDelete:
+    handler: lambdas/users/deleteUser.handler
+    events:
+      - http:
+          path: users/{userId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # ROLES
+  # ═══════════════════════════════════════════════════════════
+
+  roleCreate:
+    handler: lambdas/roles/createRole.handler
+    events:
+      - http:
+          path: roles
+          method: post
+          cors: true
+
+  roleGetAll:
+    handler: lambdas/roles/getAllRoles.handler
+    events:
+      - http:
+          path: roles
+          method: get
+          cors: true
+
+  roleGetOne:
+    handler: lambdas/roles/getRole.handler
+    events:
+      - http:
+          path: roles/{roleId}
+          method: get
+          cors: true
+
+  roleUpdate:
+    handler: lambdas/roles/updateRole.handler
+    events:
+      - http:
+          path: roles/{roleId}
+          method: put
+          cors: true
+
+  roleDelete:
+    handler: lambdas/roles/deleteRole.handler
+    events:
+      - http:
+          path: roles/{roleId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # CATEGORIES
+  # ═══════════════════════════════════════════════════════════
+
+  categoryCreate:
+    handler: lambdas/categories/createCategory.handler
+    events:
+      - http:
+          path: categories
+          method: post
+          cors: true
+
+  categoryGetAll:
+    handler: lambdas/categories/getAllCategories.handler
+    events:
+      - http:
+          path: categories
+          method: get
+          cors: true
+
+  categoryGetOne:
+    handler: lambdas/categories/getCategory.handler
+    events:
+      - http:
+          path: categories/{categoryId}
+          method: get
+          cors: true
+
+  categoryUpdate:
+    handler: lambdas/categories/updateCategory.handler
+    events:
+      - http:
+          path: categories/{categoryId}
+          method: put
+          cors: true
+
+  categoryDelete:
+    handler: lambdas/categories/deleteCategory.handler
+    events:
+      - http:
+          path: categories/{categoryId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # PRODUCTS
+  # ═══════════════════════════════════════════════════════════
+
+  productCreate:
+    handler: lambdas/products/createProduct.handler
+    events:
+      - http:
+          path: products
+          method: post
+          cors: true
+
+  productGetAll:
+    handler: lambdas/products/getAllProducts.handler
+    events:
+      - http:
+          path: products
+          method: get
+          cors: true
+
+  productGetOne:
+    handler: lambdas/products/getProduct.handler
+    events:
+      - http:
+          path: products/{productId}
+          method: get
+          cors: true
+
+  productUpdate:
+    handler: lambdas/products/updateProduct.handler
+    events:
+      - http:
+          path: products/{productId}
+          method: put
+          cors: true
+
+  productDelete:
+    handler: lambdas/products/deleteProduct.handler
+    events:
+      - http:
+          path: products/{productId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # ATTRIBUTES
+  # ═══════════════════════════════════════════════════════════
+
+  attributeCreate:
+    handler: lambdas/attributes/createAttribute.handler
+    events:
+      - http:
+          path: attributes
+          method: post
+          cors: true
+
+  attributeGetAll:
+    handler: lambdas/attributes/getAllAttributes.handler
+    events:
+      - http:
+          path: attributes
+          method: get
+          cors: true
+
+  attributeGetOne:
+    handler: lambdas/attributes/getAttribute.handler
+    events:
+      - http:
+          path: attributes/{attributeId}
+          method: get
+          cors: true
+
+  attributeUpdate:
+    handler: lambdas/attributes/updateAttribute.handler
+    events:
+      - http:
+          path: attributes/{attributeId}
+          method: put
+          cors: true
+
+  attributeDelete:
+    handler: lambdas/attributes/deleteAttribute.handler
+    events:
+      - http:
+          path: attributes/{attributeId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # VARIANTS
+  # ═══════════════════════════════════════════════════════════
+
+  variantCreate:
+    handler: lambdas/variants/createVariant.handler
+    events:
+      - http:
+          path: variants
+          method: post
+          cors: true
+
+  variantGetAll:
+    handler: lambdas/variants/getAllVariants.handler
+    events:
+      - http:
+          path: variants
+          method: get
+          cors: true
+
+  variantGetOne:
+    handler: lambdas/variants/getVariant.handler
+    events:
+      - http:
+          path: variants/{variantId}
+          method: get
+          cors: true
+
+  variantUpdate:
+    handler: lambdas/variants/updateVariant.handler
+    events:
+      - http:
+          path: variants/{variantId}
+          method: put
+          cors: true
+
+  variantDelete:
+    handler: lambdas/variants/deleteVariant.handler
+    events:
+      - http:
+          path: variants/{variantId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # BRANDS
+  # ═══════════════════════════════════════════════════════════
+
+  brandCreate:
+    handler: lambdas/brands/createBrand.handler
+    events:
+      - http:
+          path: brands
+          method: post
+          cors: true
+
+  brandGetAll:
+    handler: lambdas/brands/getAllBrands.handler
+    events:
+      - http:
+          path: brands
+          method: get
+          cors: true
+
+  brandGetOne:
+    handler: lambdas/brands/getBrand.handler
+    events:
+      - http:
+          path: brands/{brandId}
+          method: get
+          cors: true
+
+  brandUpdate:
+    handler: lambdas/brands/updateBrand.handler
+    events:
+      - http:
+          path: brands/{brandId}
+          method: put
+          cors: true
+
+  brandDelete:
+    handler: lambdas/brands/deleteBrand.handler
+    events:
+      - http:
+          path: brands/{brandId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # LOCATIONS (UBICACIONES / BODEGAS)
+  # ═══════════════════════════════════════════════════════════
+
+  locationCreate:
+    handler: lambdas/locations/createLocation.handler
+    events:
+      - http:
+          path: locations
+          method: post
+          cors: true
+
+  locationGetAll:
+    handler: lambdas/locations/getAllLocations.handler
+    events:
+      - http:
+          path: locations
+          method: get
+          cors: true
+
+  locationGetOne:
+    handler: lambdas/locations/getLocation.handler
+    events:
+      - http:
+          path: locations/{locationId}
+          method: get
+          cors: true
+
+  locationUpdate:
+    handler: lambdas/locations/updateLocation.handler
+    events:
+      - http:
+          path: locations/{locationId}
+          method: put
+          cors: true
+
+  locationDelete:
+    handler: lambdas/locations/deleteLocation.handler
+    events:
+      - http:
+          path: locations/{locationId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # INVENTORY (CONTROL DE INVENTARIO Y STOCK)
+  # ═══════════════════════════════════════════════════════════
+
+  inventoryLowStock:
+    handler: lambdas/inventory/getLowStock.handler
+    events:
+      - http:
+          path: inventory/status/low-stock
+          method: get
+          cors: true
+
+  inventoryGetAll:
+    handler: lambdas/inventory/getInventory.handler
+    events:
+      - http:
+          path: inventory
+          method: get
+          cors: true
+
+  inventoryCreate:
+    handler: lambdas/inventory/createInventory.handler
+    events:
+      - http:
+          path: inventory
+          method: post
+          cors: true
+
+  inventoryGetOne:
+    handler: lambdas/inventory/getInventoryItem.handler
+    events:
+      - http:
+          path: inventory/{id}
+          method: get
+          cors: true
+
+  inventoryUpdate:
+    handler: lambdas/inventory/updateInventory.handler
+    events:
+      - http:
+          path: inventory/{id}
+          method: put
+          cors: true
+
+  inventoryAdjust:
+    handler: lambdas/inventory/adjustStock.handler
+    events:
+      - http:
+          path: inventory/{id}/adjust
+          method: post
+          cors: true
+
+  inventoryMovements:
+    handler: lambdas/inventory/getMovements.handler
+    events:
+      - http:
+          path: inventory/{id}/movements
+          method: get
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # CLIENTS (CLIENTES)
+  # ═══════════════════════════════════════════════════════════
+
+  clientCreate:
+    handler: lambdas/clients/createClient.handler
+    events:
+      - http:
+          path: clients
+          method: post
+          cors: true
+
+  clientGetAll:
+    handler: lambdas/clients/getAllClients.handler
+    events:
+      - http:
+          path: clients
+          method: get
+          cors: true
+
+  clientGetOne:
+    handler: lambdas/clients/getClient.handler
+    events:
+      - http:
+          path: clients/{clientId}
+          method: get
+          cors: true
+
+  clientUpdate:
+    handler: lambdas/clients/updateClient.handler
+    events:
+      - http:
+          path: clients/{clientId}
+          method: put
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # SALES (VENTAS - CONTADO Y CRÉDITO)
+  # ═══════════════════════════════════════════════════════════
+
+  saleCreate:
+    handler: lambdas/sales/createSale.handler
+    events:
+      - http:
+          path: sales
+          method: post
+          cors: true
+
+  saleGetAll:
+    handler: lambdas/sales/getAllSales.handler
+    events:
+      - http:
+          path: sales
+          method: get
+          cors: true
+
+  saleGetOne:
+    handler: lambdas/sales/getSale.handler
+    events:
+      - http:
+          path: sales/{saleId}
+          method: get
+          cors: true
+
+  saleUpdate:
+    handler: lambdas/sales/updateSale.handler
+    events:
+      - http:
+          path: sales/{saleId}
+          method: put
+          cors: true
+
+  saleUpdateStatus:
+    handler: lambdas/sales/updateSaleStatus.handler
+    events:
+      - http:
+          path: sales/{saleId}/status
+          method: put
+          cors: true
+
+  saleMarkLinePurchased:
+    handler: lambdas/sales/markLinePurchased.handler
+    events:
+      - http:
+          path: sales/{saleId}/items/{index}/purchase
+          method: post
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # STORAGE (S3 PRESIGNED URLS)
+  # ═══════════════════════════════════════════════════════════
+
+  presignedUrl:
+    handler: lambdas/storage/getPresignedUrl.handler
+    events:
+      - http:
+          path: storage/presigned-url
+          method: post
+          cors: true
+
+  proxyImage:
+    handler: lambdas/storage/proxyImage.handler
+    events:
+      - http:
+          path: storage/proxy-image
+          method: get
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # WITHDRAWALS (RETIROS DE DINERO / CRM)
+  # ═══════════════════════════════════════════════════════════
+
+  withdrawalCreate:
+    handler: lambdas/withdrawals/createWithdrawal.handler
+    events:
+      - http:
+          path: withdrawals
+          method: post
+          cors: true
+
+  withdrawalGetAll:
+    handler: lambdas/withdrawals/getAllWithdrawals.handler
+    events:
+      - http:
+          path: withdrawals
+          method: get
+          cors: true
+
+  withdrawalGetOne:
+    handler: lambdas/withdrawals/getWithdrawal.handler
+    events:
+      - http:
+          path: withdrawals/{withdrawalId}
+          method: get
+          cors: true
+
+  withdrawalUpdate:
+    handler: lambdas/withdrawals/updateWithdrawal.handler
+    events:
+      - http:
+          path: withdrawals/{withdrawalId}
+          method: put
+          cors: true
+
+  withdrawalDelete:
+    handler: lambdas/withdrawals/deleteWithdrawal.handler
+    events:
+      - http:
+          path: withdrawals/{withdrawalId}
+          method: delete
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # REVIEWS (RESEÑAS POR LÍNEA ENTREGADA)
+  # ═══════════════════════════════════════════════════════════
+
+  reviewLink:
+    handler: lambdas/reviews/getReviewLink.handler
+    events:
+      - http:
+          path: reviews/link/{token}
+          method: get
+          cors: true
+
+  reviewCreate:
+    handler: lambdas/reviews/createReview.handler
+    events:
+      - http:
+          path: reviews
+          method: post
+          cors: true
+
+  reviewList:
+    handler: lambdas/reviews/listReviews.handler
+    events:
+      - http:
+          path: reviews
+          method: get
+          cors: true
+
+  reviewUpdateStatus:
+    handler: lambdas/reviews/updateReviewStatus.handler
+    events:
+      - http:
+          path: reviews/{reviewId}/status
+          method: put
+          cors: true
+
+  emailSend:
+    handler: lambdas/emails/sendEmail.handler
+    events:
+      - http:
+          path: emails/send
+          method: post
+          cors: true
+
+  productReviews:
+    handler: lambdas/reviews/getProductReviews.handler
+    events:
+      - http:
+          path: products/{productId}/reviews
+          method: get
+          cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # PAYMENTS (PAGOS / ABONOS / CUOTAS)
+  # ═══════════════════════════════════════════════════════════
+
+  paymentCreate:
+    handler: lambdas/payments/createPayment.handler
+    events:
+      - http:
+          path: payments/{saleId}
+          method: post
+          cors: true
+
+  paymentGetAll:
+    handler: lambdas/payments/getAllPayments.handler
+    events:
+      - http:
+          path: payments
+          method: get
+          cors: true

@@ -1,0 +1,7 @@
+node_modules/
+.serverless/
+
+# Secretos locales
+.env
+.env.*
+!.env.example

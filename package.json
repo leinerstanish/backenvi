@@ -1,0 +1,24 @@
+{
+  "name": "prostore-backend",
+  "version": "1.0.0",
+  "description": "ProStore Backend - Clean & Simple",
+  "main": "handler.js",
+  "scripts": {
+    "start": "serverless offline start",
+    "deploy": "serverless deploy",
+    "setup": "node scripts/createTables.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0",
+    "@aws-sdk/s3-request-presigner": "^3.1135.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.10.1",
+    "pdfkit": "^0.15.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "serverless": "^3.40.0",
+    "serverless-offline": "^13.2.0"
+  }
+}
