@@ -549,6 +549,14 @@ functions:
           method: get
           cors: true
 
+  saleTrack:
+    handler: lambdas/sales/trackSale.handler
+    events:
+      - http:
+          path: orders/track
+          method: post
+          cors: true
+
   saleUpdate:
     handler: lambdas/sales/updateSale.handler
     events:
