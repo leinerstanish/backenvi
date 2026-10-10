@@ -168,12 +168,23 @@ class VariantRepository {
   }
 
   #present(variant, index, stockMap) {
-    const stock = stockMap.get(variant.variantId) || { stock: 0, availableStock: 0 };
+    const stock = variant.kind === 'COMBO'
+      ? this.#comboStock(variant, stockMap)
+      : (stockMap.get(variant.variantId) || { stock: 0, availableStock: 0 });
     const attributes = normalizeVariantAttributes(variant.attributes, index).map((a) => ({
       ...a,
       name: a.name ?? index.byId.get(a.attributeId)?.name ?? null
     }));
     return { ...variant, attributes, stock: stock.stock, availableStock: stock.availableStock };
+  }
+
+  #comboStock(variant, stockMap) {
+    const parts = (variant.comboSelection || []).map((c) => stockMap.get(c.variantId) || { stock: 0, availableStock: 0 });
+    if (parts.length === 0) return { stock: 0, availableStock: 0 };
+    return {
+      stock: Math.min(...parts.map((p) => p.stock)),
+      availableStock: Math.min(...parts.map((p) => p.availableStock))
+    };
   }
 
   #buildUpdate(updates) {

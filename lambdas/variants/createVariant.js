@@ -34,6 +34,9 @@ module.exports.handler = async (event) => {
     const validated = validateVariant(body, index);
     const images = await s3Service.processImages(validated.images, 'variants');
 
+    if (product.kind === 'COMBO') {
+      throw new HttpError(400, 'Las variantes de un combo se generan desde el combo');
+    }
     const isExternal = product.fulfillment === FULFILLMENT.EXTERNAL;
     if (isExternal && validated.stock > 0) {
       throw new HttpError(400, 'Un producto externo no maneja inventario: el stock de la variante debe ser 0');

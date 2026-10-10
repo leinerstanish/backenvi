@@ -30,6 +30,10 @@ module.exports.handler = async (event) => {
       return response(404, { error: 'Variant not found' });
     }
 
+    if (current.kind === 'COMBO') {
+      throw new HttpError(400, 'Las variantes de un combo se administran desde el combo');
+    }
+
     const product = await productRepository.getOne(current.productId);
     if (body.stock !== undefined && product && product.fulfillment === FULFILLMENT.EXTERNAL) {
       throw new HttpError(400, 'Un producto externo no maneja inventario');

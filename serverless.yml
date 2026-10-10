@@ -689,6 +689,26 @@ functions:
           method: post
           cors: true
 
+  # ═══════════════════════════════════════════════════════════
+  # COMBOS (PRODUCTOS COMPUESTOS DE 2 O MÁS PRODUCTOS)
+  # ═══════════════════════════════════════════════════════════
+
+  comboCreate:
+    handler: lambdas/combos/createCombo.handler
+    events:
+      - http:
+          path: combos
+          method: post
+          cors: true
+
+  comboUpdate:
+    handler: lambdas/combos/updateCombo.handler
+    events:
+      - http:
+          path: combos/{productId}
+          method: put
+          cors: true
+
   productReviews:
     handler: lambdas/reviews/getProductReviews.handler
     events:

@@ -7,6 +7,7 @@ const paymentRepository = require('./paymentRepository');
 const { HttpError } = require('./catalogRules');
 const { calculateShippingFee } = require('./pricing');
 const { assertTransition } = require('./orderStatus');
+const { flattenStockLines } = require('./comboRules');
 const { INVENTORY_TABLE, MOVEMENTS_TABLE, inventoryIdFor } = require('./inventoryKeys');
 
 const client = new DynamoDBClient({
@@ -36,6 +37,8 @@ class SaleRepository {
         attributes: item.attributes || [],
         fulfillment: item.fulfillment || 'STOCK',
         fulfillmentStatus: external ? 'TO_PURCHASE' : null,
+        kind: item.kind || 'PRODUCT',
+        components: item.components || null,
         locationId: item.locationId,
         name: item.name || '',
         price,
@@ -85,9 +88,9 @@ class SaleRepository {
       updatedAt: now
     };
 
-    const stockItems = enrichedItems.filter((item) => item.fulfillment !== 'EXTERNAL');
+    const stockLines = flattenStockLines(enrichedItems);
 
-    const stockOps = stockItems.flatMap((item) => {
+    const stockOps = stockLines.flatMap((item) => {
       const inventoryId = inventoryIdFor(item.variantId, item.locationId);
       return [
         {
@@ -132,7 +135,7 @@ class SaleRepository {
       const failed = reasons.findIndex((r) => r.Code === 'ConditionalCheckFailed');
       const isStockOp = failed > 0 && (failed - 1) % 2 === 0;
       if (error.name === 'TransactionCanceledException' && isStockOp) {
-        const item = stockItems[(failed - 1) / 2];
+        const item = stockLines[(failed - 1) / 2];
         throw new HttpError(409, `Sin stock suficiente de ${item.sku || item.variantId} en la bodega seleccionada`);
       }
       throw error;
@@ -209,8 +212,7 @@ class SaleRepository {
     }];
 
     if (to === 'CANCELLED') {
-      for (const item of items) {
-        if (item.fulfillment === 'EXTERNAL' || !item.variantId || !item.locationId) continue;
+      for (const item of flattenStockLines(items)) {
         const inventoryId = inventoryIdFor(item.variantId, item.locationId);
         transactItems.push({
           Update: {

@@ -60,6 +60,23 @@ module.exports.handler = async (event) => {
       const product = await productRepository.getOne(item.productId);
       const fulfillment = product?.fulfillment || FULFILLMENT.STOCK;
 
+      if (variant.kind === 'COMBO') {
+        enrichedItems.push({
+          productId: item.productId,
+          variantId: variant.variantId,
+          sku: variant.sku,
+          attributes: normalizeVariantAttributes(variant.attributes, index),
+          fulfillment: FULFILLMENT.STOCK,
+          kind: 'COMBO',
+          components: variant.comboSelection,
+          locationId: item.locationId || defaultLocationId,
+          name: item.name || product?.name,
+          price: variant.price,
+          quantity
+        });
+        continue;
+      }
+
       enrichedItems.push({
         productId: item.productId,
         variantId: variant.variantId,

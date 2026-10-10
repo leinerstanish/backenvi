@@ -84,6 +84,37 @@ class ProductRepository {
     return { ...product, variants: variants.map((v, i) => ({ ...v, stock: variantsData[i].stock || 0, availableStock: variantsData[i].stock || 0 })) };
   }
 
+  async createCombo(productData, comboVariants) {
+    const productId = 'prod_' + crypto.randomBytes(12).toString('hex');
+    const now = new Date().toISOString();
+
+    const product = {
+      productId,
+      kind: 'COMBO',
+      name: productData.name,
+      description: productData.description || '',
+      categoryId: productData.categoryId || null,
+      brandId: productData.brandId || null,
+      images: productData.images || [],
+      sku: '',
+      price: comboVariants.length ? comboVariants[0].price : 0,
+      cost: 0,
+      fulfillment: 'STOCK',
+      comboComponents: productData.components,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const variants = comboVariants.map((v) => ({ ...v, productId }));
+
+    await runTransaction([
+      putProduct(product),
+      ...variants.flatMap((v) => [putVariant(v), lockSku(v.sku, v.variantId)])
+    ]);
+
+    return { ...product, variants };
+  }
+
   async getAll() {
     const result = await docClient.send(new ScanCommand({
       TableName: TABLE_NAME
