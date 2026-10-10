@@ -3,7 +3,7 @@
 const productRepository = require('../shared/productRepository');
 const variantRepository = require('../shared/variantRepository');
 const s3Service = require('../shared/s3Service');
-const { presentProduct } = require('../shared/auth');
+const { presentProduct, isAdminRequest } = require('../shared/auth');
 const { HttpError, FULFILLMENT } = require('../shared/catalogRules');
 const { validateComponents, buildComboVariants } = require('../shared/comboRules');
 
@@ -12,6 +12,10 @@ const response = (statusCode, body) => ({ statusCode, headers: CORS_HEADERS, bod
 
 module.exports.handler = async (event) => {
   try {
+    if (!isAdminRequest(event)) {
+      return response(401, { error: 'Sesión de administrador requerida' });
+    }
+
     const { name, description, categoryId, brandId, images, components } = JSON.parse(event.body || '{}');
     if (!name) throw new HttpError(400, 'name requerido');
 

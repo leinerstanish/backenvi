@@ -3,7 +3,7 @@
 const productRepository = require('../shared/productRepository');
 const variantRepository = require('../shared/variantRepository');
 const s3Service = require('../shared/s3Service');
-const { presentProduct } = require('../shared/auth');
+const { presentProduct, isAdminRequest } = require('../shared/auth');
 const { HttpError } = require('../shared/catalogRules');
 const { validateComponents } = require('../shared/comboRules');
 
@@ -14,6 +14,10 @@ const EDITABLE_FIELDS = ['name', 'description', 'categoryId', 'brandId'];
 
 module.exports.handler = async (event) => {
   try {
+    if (!isAdminRequest(event)) {
+      return response(401, { error: 'Sesión de administrador requerida' });
+    }
+
     const { productId } = event.pathParameters || {};
     const body = JSON.parse(event.body || '{}');
 
