@@ -22,16 +22,16 @@ module.exports.handler = async (event) => {
     }
 
     const [product, variant, existing] = await Promise.all([
-      productRepository.getOne(line.productId),
-      variantRepository.getOne(line.variantId),
-      reviewRepository.getOne(`${sale.saleId}#${lineIndex}`)
+      line.productId ? productRepository.getOne(line.productId).catch(() => null) : null,
+      line.variantId ? variantRepository.getOne(line.variantId).catch(() => null) : null,
+      reviewRepository.getOne(`${sale.saleId}#${lineIndex}`).catch(() => null)
     ]);
 
     return response(200, {
-      productId: line.productId,
+      productId: line.productId || (product ? product.productId : ''),
       productName: product ? product.name : line.name,
       productImage: product && product.images && product.images[0] ? product.images[0] : null,
-      variantLabel: variant ? variant.attributes.map((a) => a.name ? `${a.name}: ${a.value}` : a.value).join(' · ') : '',
+      variantLabel: variant ? (variant.attributes || []).map((a) => a.name ? `${a.name}: ${a.value}` : a.value).join(' · ') : '',
       alreadyReviewed: Boolean(existing)
     });
   } catch (error) {

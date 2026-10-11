@@ -60,8 +60,8 @@ module.exports.handler = async (event) => {
         reviewId: `${sale.saleId}#${lineIndex}`,
         saleId: sale.saleId,
         lineIndex,
-        productId: line.productId,
-        variantId: line.variantId,
+        productId: line.productId || null,
+        variantId: line.variantId || null,
         ...review
       });
       return response(201, created);
