@@ -30,6 +30,10 @@ provider:
     MAIL_FROM: ${env:MAIL_FROM, 'ENVI <admin@envitienda.com>'}
     STORE_URL: ${env:STORE_URL, 'https://envitienda.com'}
     SUPPORT_EMAIL: ${env:SUPPORT_EMAIL, 'admin@envitienda.com'}
+    WOMPI_PUBLIC_KEY: ${env:WOMPI_PUBLIC_KEY, ''}
+    WOMPI_INTEGRITY_SECRET: ${env:WOMPI_INTEGRITY_SECRET, ''}
+    WOMPI_EVENTS_SECRET: ${env:WOMPI_EVENTS_SECRET, ''}
+    PAYMENT_TIMEOUT_MINUTES: ${env:PAYMENT_TIMEOUT_MINUTES, '120'}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -736,3 +740,43 @@ functions:
           path: payments
           method: get
           cors: true
+
+  # ═══════════════════════════════════════════════════════════
+  # CHECKOUT EN LÍNEA (WOMPI)
+  # ═══════════════════════════════════════════════════════════
+
+  checkoutCreate:
+    handler: lambdas/checkout/createCheckout.handler
+    events:
+      - http:
+          path: checkout
+          method: post
+          cors: true
+
+  checkoutStatus:
+    handler: lambdas/checkout/getCheckoutStatus.handler
+    events:
+      - http:
+          path: checkout/{saleId}
+          method: get
+          cors: true
+
+  checkoutPaymentSession:
+    handler: lambdas/checkout/createPaymentSession.handler
+    events:
+      - http:
+          path: checkout/{saleId}/session
+          method: post
+          cors: true
+
+  wompiEvents:
+    handler: lambdas/checkout/wompiEvents.handler
+    events:
+      - http:
+          path: payments/wompi/events
+          method: post
+
+  expirePendingPayments:
+    handler: lambdas/checkout/expirePendingPayments.handler
+    events:
+      - schedule: rate(15 minutes)

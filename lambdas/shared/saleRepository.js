@@ -56,7 +56,10 @@ class SaleRepository {
     let balanceDue = totalAmount;
     let status = 'PENDING';
 
-    if (saleType === 'CASH') {
+    if (saleData.awaitingPayment) {
+      // Compra en la tienda: el stock queda reservado hasta que la pasarela confirme el pago.
+      status = 'PENDING_PAYMENT';
+    } else if (saleType === 'CASH') {
       balanceDue = 0;
       status = 'PAID';
     } else {
@@ -82,6 +85,8 @@ class SaleRepository {
       saleType,
       status,
       balanceDue,
+      channel: saleData.channel || 'ADMIN',
+      paymentMethod: saleData.paymentMethod || 'CASH',
       dueDate: saleData.dueDate || null,
       notes: saleData.notes || '',
       createdAt: now,
@@ -142,7 +147,8 @@ class SaleRepository {
     }
 
     let paymentRecord = null;
-    const actualPaymentAmount = saleType === 'CASH' ? totalAmount : initialPaymentAmount;
+    const actualPaymentAmount = status === 'PENDING_PAYMENT' ? 0
+      : saleType === 'CASH' ? totalAmount : initialPaymentAmount;
 
     if (actualPaymentAmount > 0) {
       paymentRecord = await paymentRepository.create({
@@ -179,6 +185,11 @@ class SaleRepository {
     const from = sale.fulfillmentStatus || 'PENDING';
     assertTransition(from, to);
 
+    const awaitingPayment = sale.status === 'PENDING_PAYMENT';
+    if (awaitingPayment && to !== 'CANCELLED') {
+      throw new HttpError(409, 'El pedido aún no tiene el pago confirmado');
+    }
+
     const items = sale.items || [];
     if (to === 'SHIPPED' && items.some((i) => i.fulfillment === 'EXTERNAL' && i.fulfillmentStatus !== 'PURCHASED')) {
       throw new HttpError(409, 'Hay productos externos que aún no se han comprado');
@@ -190,6 +201,16 @@ class SaleRepository {
     const updateNames = { '#fs': 'fulfillmentStatus', '#tl': 'timeline', '#u': 'updatedAt' };
     const updateValues = { ':to': to, ':from': from, ':ev': [event], ':empty': [], ':now': now };
     let updateExpression = 'SET #fs = :to, #tl = list_append(if_not_exists(#tl, :empty), :ev), #u = :now';
+    let condition = from === 'PENDING' ? '(attribute_not_exists(#fs) OR #fs = :from)' : '#fs = :from';
+
+    if (awaitingPayment) {
+      // Cancelar un pedido sin pagar también cierra el cobro; un pago que llegue después queda marcado para reembolso.
+      updateNames['#st'] = 'status';
+      updateValues[':cancelled'] = 'CANCELLED';
+      updateValues[':pending'] = 'PENDING_PAYMENT';
+      updateExpression += ', #st = :cancelled';
+      condition = `(${condition}) AND #st = :pending`;
+    }
 
     if (to === 'DELIVERED') {
       updateNames['#items'] = 'items';
@@ -205,7 +226,7 @@ class SaleRepository {
         TableName: TABLE_NAME,
         Key: { saleId },
         UpdateExpression: updateExpression,
-        ConditionExpression: from === 'PENDING' ? '(attribute_not_exists(#fs) OR #fs = :from)' : '#fs = :from',
+        ConditionExpression: condition,
         ExpressionAttributeNames: updateNames,
         ExpressionAttributeValues: updateValues
       }
@@ -305,6 +326,68 @@ class SaleRepository {
   async hasSalesForProduct(productId) {
     const sales = await this.getAll();
     return sales.some((sale) => (sale.items || []).some((item) => item.productId === productId));
+  }
+
+  /** Marca pagada una venta PENDING_PAYMENT. Solo un llamado gana, así webhooks repetidos no duplican el pago. */
+  async markPaidOnline(saleId, payment) {
+    const now = new Date().toISOString();
+    const event = { type: 'PAYMENT_APPROVED', provider: payment.provider, transactionId: payment.transactionId, by: payment.provider, at: now };
+    try {
+      const result = await docClient.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { saleId },
+        UpdateExpression: 'SET #st = :paid, balanceDue = :zero, onlinePayment = :payment, #tl = list_append(if_not_exists(#tl, :empty), :ev), #u = :now',
+        ConditionExpression: '#st = :pending',
+        ExpressionAttributeNames: { '#st': 'status', '#tl': 'timeline', '#u': 'updatedAt' },
+        ExpressionAttributeValues: {
+          ':paid': 'PAID', ':pending': 'PENDING_PAYMENT', ':zero': 0,
+          ':payment': { ...payment, approvedAt: now }, ':ev': [event], ':empty': [], ':now': now
+        },
+        ReturnValues: 'ALL_NEW'
+      }));
+      return { applied: true, sale: result.Attributes };
+    } catch (error) {
+      if (error.name === 'ConditionalCheckFailedException') return { applied: false };
+      throw error;
+    }
+  }
+
+  /** Guarda un intento de pago no aprobado (o un pago que llegó a un pedido ya cancelado) sin repetir el mismo evento. */
+  async recordPaymentAttempt(saleId, attempt) {
+    const now = new Date().toISOString();
+    const event = { type: 'PAYMENT_ATTEMPT', status: attempt.status, transactionId: attempt.transactionId, by: attempt.provider, at: now };
+    try {
+      await docClient.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { saleId },
+        UpdateExpression: 'SET lastPaymentAttempt = :a, #tl = list_append(if_not_exists(#tl, :empty), :ev), #u = :now',
+        ConditionExpression: 'attribute_exists(saleId) AND (attribute_not_exists(lastPaymentAttempt) OR lastPaymentAttempt.transactionId <> :tx OR lastPaymentAttempt.#s <> :s)',
+        ExpressionAttributeNames: { '#tl': 'timeline', '#u': 'updatedAt', '#s': 'status' },
+        ExpressionAttributeValues: {
+          ':a': { ...attempt, at: now }, ':tx': attempt.transactionId, ':s': attempt.status,
+          ':ev': [event], ':empty': [], ':now': now
+        }
+      }));
+    } catch (error) {
+      if (error.name !== 'ConditionalCheckFailedException') throw error;
+    }
+  }
+
+  async getPendingPaymentBefore(isoDate) {
+    const items = [];
+    let ExclusiveStartKey;
+    do {
+      const result = await docClient.send(new ScanCommand({
+        TableName: TABLE_NAME,
+        FilterExpression: '#st = :pending AND createdAt < :cutoff',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: { ':pending': 'PENDING_PAYMENT', ':cutoff': isoDate },
+        ExclusiveStartKey
+      }));
+      items.push(...(result.Items || []));
+      ExclusiveStartKey = result.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+    return items;
   }
 
   async updateStatusAndBalance(saleId, paymentAmount) {
