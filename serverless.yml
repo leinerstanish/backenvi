@@ -12,6 +12,8 @@ provider:
   runtime: nodejs18.x
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  # CloudFormation admite 500 recursos por stack; sin versiones (no usamos alias) quedan ~82 recursos menos
+  versionFunctions: false
   environment:
     JWT_SECRET: ${env:JWT_SECRET, 'default-secret-change-in-prod'}
     JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
