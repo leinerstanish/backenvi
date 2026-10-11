@@ -2,7 +2,9 @@
 
 const productRepository = require('../shared/productRepository');
 const variantRepository = require('../shared/variantRepository');
-const { presentProduct } = require('../shared/auth');
+const reviewRepository = require('../shared/reviewRepository');
+const { isAdminRequest, presentProduct } = require('../shared/auth');
+const { productStatus } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -25,9 +27,22 @@ module.exports.handler = async (event) => {
       return response(404, { error: 'Product not found' });
     }
 
-    const variants = await variantRepository.getByProductId(productId);
+    const [variants, reviews] = await Promise.all([
+      variantRepository.getByProductId(productId),
+      reviewRepository.getApprovedByProduct(productId)
+    ]);
+    const status = productStatus(product, variants.length);
 
-    return response(200, presentProduct(event, { ...product, variants }));
+    if (status !== 'ACTIVE' && !isAdminRequest(event)) {
+      return response(404, { error: 'Product not found' });
+    }
+
+    return response(200, presentProduct(event, {
+      ...product,
+      variants,
+      status,
+      rating: reviewRepository.ratingSummary(reviews)
+    }));
   } catch (error) {
     console.error('Error:', error);
     return response(500, { error: error.message });

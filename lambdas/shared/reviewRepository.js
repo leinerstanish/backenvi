@@ -10,6 +10,13 @@ const client = new DynamoDBClient({
 const docClient = DynamoDBDocumentClient.from(client);
 const TABLE_NAME = 'reviews_table';
 
+/** Promedio con un decimal y número de reseñas. */
+function ratingSummary(reviews) {
+  if (reviews.length === 0) return { average: 0, count: 0 };
+  const total = reviews.reduce((sum, r) => sum + r.rating, 0);
+  return { average: Math.round((total / reviews.length) * 10) / 10, count: reviews.length };
+}
+
 class ReviewRepository {
   async create(review) {
     const record = { ...review, status: 'PENDING', createdAt: new Date().toISOString() };
@@ -46,6 +53,23 @@ class ReviewRepository {
     return result.Items || [];
   }
 
+  /** Map productId -> { average, count } con las reseñas aprobadas. */
+  async approvedSummaryByProduct() {
+    const result = await docClient.send(new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: '#s = :approved',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':approved': 'APPROVED' }
+    }));
+
+    const byProduct = new Map();
+    for (const review of result.Items || []) {
+      if (!byProduct.has(review.productId)) byProduct.set(review.productId, []);
+      byProduct.get(review.productId).push(review);
+    }
+    return new Map([...byProduct].map(([productId, reviews]) => [productId, ratingSummary(reviews)]));
+  }
+
   async setStatus(reviewId, status) {
     const result = await docClient.send(new UpdateCommand({
       TableName: TABLE_NAME,
@@ -61,3 +85,4 @@ class ReviewRepository {
 }
 
 module.exports = new ReviewRepository();
+module.exports.ratingSummary = ratingSummary;

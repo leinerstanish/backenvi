@@ -196,9 +196,19 @@ function validateSizeGuide(input) {
   };
 }
 
+/**
+ * Estado que ve la tienda: lo que el admin haya guardado (INACTIVE, ARCHIVED) manda;
+ * si no, un producto sin variantes no se puede vender todavía.
+ */
+function productStatus(product, variantCount) {
+  if (product.status && product.status !== 'ACTIVE') return product.status;
+  return variantCount > 0 ? 'ACTIVE' : 'PENDING_VARIANTS';
+}
+
 module.exports = {
   HttpError,
   FULFILLMENT,
+  productStatus,
   loadAttributeIndex,
   normalizeVariantAttributes,
   validateVariant,

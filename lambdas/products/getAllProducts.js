@@ -2,7 +2,9 @@
 
 const productRepository = require('../shared/productRepository');
 const variantRepository = require('../shared/variantRepository');
-const { presentProduct } = require('../shared/auth');
+const reviewRepository = require('../shared/reviewRepository');
+const { isAdminRequest, presentProduct } = require('../shared/auth');
+const { productStatus } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -15,11 +17,14 @@ const response = (statusCode, body) => ({
   body: JSON.stringify(body)
 });
 
+const NO_REVIEWS = { average: 0, count: 0 };
+
 module.exports.handler = async (event) => {
   try {
-    const [products, variants] = await Promise.all([
+    const [products, variants, ratings] = await Promise.all([
       productRepository.getAll(),
-      variantRepository.getAll()
+      variantRepository.getAll(),
+      reviewRepository.approvedSummaryByProduct()
     ]);
 
     const variantsByProduct = variants.reduce((acc, v) => {
@@ -27,15 +32,21 @@ module.exports.handler = async (event) => {
       return acc;
     }, {});
 
-    const items = products.map((p) => {
-      const productVariants = variantsByProduct[p.productId] || [];
-      return presentProduct(event, {
-        ...p,
-        variants: productVariants,
-        variantCount: productVariants.length,
-        status: productVariants.length > 0 ? 'ACTIVE' : 'PENDING_VARIANTS'
-      });
-    });
+    // La tienda solo ve lo que se puede vender; el admin ve todo.
+    const admin = isAdminRequest(event);
+
+    const items = products
+      .map((p) => {
+        const productVariants = variantsByProduct[p.productId] || [];
+        return presentProduct(event, {
+          ...p,
+          variants: productVariants,
+          variantCount: productVariants.length,
+          status: productStatus(p, productVariants.length),
+          rating: ratings.get(p.productId) || NO_REVIEWS
+        });
+      })
+      .filter((p) => admin || p.status === 'ACTIVE');
 
     return response(200, { items, total: items.length });
   } catch (error) {

@@ -21,9 +21,7 @@ module.exports.handler = async (event) => {
         createdAt: r.createdAt
       }));
 
-    const average = items.length ? Math.round((items.reduce((s, r) => s + r.rating, 0) / items.length) * 10) / 10 : 0;
-
-    return response(200, { average, count: items.length, items });
+    return response(200, { ...reviewRepository.ratingSummary(items), items });
   } catch (error) {
     console.error('Error in getProductReviews:', error);
     return response(500, { error: error.message });
