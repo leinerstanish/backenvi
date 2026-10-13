@@ -4,7 +4,7 @@ const variantRepository = require('../shared/variantRepository');
 const productRepository = require('../shared/productRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
-const { loadAttributeIndex, validateVariant, FULFILLMENT, HttpError } = require('../shared/catalogRules');
+const { loadAttributeIndex, validateVariant, assertUniqueCombinations, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -32,6 +32,7 @@ module.exports.handler = async (event) => {
 
     const index = await loadAttributeIndex();
     const validated = validateVariant(body, index);
+    assertUniqueCombinations([validated], await variantRepository.getByProductId(body.productId));
     const images = await s3Service.processImages(validated.images, 'variants');
 
     if (product.kind === 'COMBO') {

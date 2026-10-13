@@ -5,7 +5,7 @@ const s3Service = require('../shared/s3Service');
 const inventoryRepository = require('../shared/inventoryRepository');
 const locationRepository = require('../shared/locationRepository');
 const productRepository = require('../shared/productRepository');
-const { loadAttributeIndex, validateVariant, FULFILLMENT, HttpError } = require('../shared/catalogRules');
+const { loadAttributeIndex, validateVariant, assertUniqueCombinations, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -41,6 +41,10 @@ module.exports.handler = async (event) => {
 
     const index = await loadAttributeIndex();
     const merged = validateVariant({ ...current, ...body }, index);
+    if (body.attributes !== undefined) {
+      const siblings = await variantRepository.getByProductId(current.productId);
+      assertUniqueCombinations([merged], siblings, { ignoreVariantId: variantId });
+    }
 
     const updates = {};
     EDITABLE_FIELDS.forEach((field) => {

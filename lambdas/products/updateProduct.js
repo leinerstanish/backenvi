@@ -7,7 +7,7 @@ const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
 const { validateProductVideos } = require('../shared/productVideos');
 const { presentProduct } = require('../shared/auth');
-const { loadAttributeIndex, validateVariantSet, validateProductExtras, FULFILLMENT, HttpError } = require('../shared/catalogRules');
+const { loadAttributeIndex, validateVariantSet, validateProductExtras, assertUniqueCombinations, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -69,6 +69,7 @@ module.exports.handler = async (event) => {
     if (variants !== undefined) {
       const index = await loadAttributeIndex();
       const validVariants = validateVariantSet(variants, index);
+      assertUniqueCombinations(validVariants, existingVariants);
 
       if (nextFulfillment === FULFILLMENT.EXTERNAL && validVariants.some((v) => v.stock > 0)) {
         throw new HttpError(400, 'Un producto externo no maneja inventario: el stock de sus variantes debe ser 0');

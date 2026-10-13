@@ -88,6 +88,36 @@ function validateVariant(input, index) {
   };
 }
 
+// Firma de la combinación de atributos sin importar el orden: "Talla M + Color Negro" = "Color Negro + Talla M".
+function variantSignature(attributes) {
+  return (Array.isArray(attributes) ? attributes : [])
+    .filter((a) => a && a.value !== '' && a.value != null)
+    .map((a) => `${a.attributeId || a.name}=${String(a.value).trim().toLowerCase()}`)
+    .sort()
+    .join('|');
+}
+
+/**
+ * Impide dos variantes del mismo producto con la misma combinación de atributos.
+ * Las variantes sin atributos no se comparan (se completan después en el editor).
+ */
+function assertUniqueCombinations(candidates, existing = [], { ignoreVariantId } = {}) {
+  const taken = new Map();
+  for (const v of existing) {
+    if (ignoreVariantId && v.variantId === ignoreVariantId) continue;
+    const signature = variantSignature(v.attributes);
+    if (signature) taken.set(signature, v.sku);
+  }
+  for (const v of candidates) {
+    const signature = variantSignature(v.attributes);
+    if (!signature) continue;
+    if (taken.has(signature)) {
+      throw new HttpError(409, `La variante ${v.sku} tiene los mismos atributos que ${taken.get(signature)}`);
+    }
+    taken.set(signature, v.sku);
+  }
+}
+
 function validateVariantSet(inputs, index) {
   if (!Array.isArray(inputs) || inputs.length === 0) {
     throw new HttpError(400, 'El producto debe tener al menos una variante');
@@ -105,6 +135,7 @@ function validateVariantSet(inputs, index) {
     }
     seenSkus.add(variant.sku);
   }
+  assertUniqueCombinations(validated);
 
   return validated;
 }
@@ -214,4 +245,5 @@ module.exports = {
   validateVariant,
   validateVariantSet,
   validateProductExtras,
+  assertUniqueCombinations,
 };
