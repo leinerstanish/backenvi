@@ -3,6 +3,7 @@
 const productRepository = require('../shared/productRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
+const { validateProductVideos } = require('../shared/productVideos');
 const { loadAttributeIndex, validateVariantSet, validateProductExtras, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
@@ -26,6 +27,7 @@ module.exports.handler = async (event) => {
     }
 
     const extras = validateProductExtras(body);
+    const videos = validateProductVideos(body.videos);
     const fulfillment = extras.fulfillment || FULFILLMENT.STOCK;
 
     const index = await loadAttributeIndex();
@@ -51,6 +53,7 @@ module.exports.handler = async (event) => {
       categoryId: categoryId || null,
       brandId: brandId || null,
       images: uploadedImages,
+      ...(videos ? { videos } : {}),
       sku: sku || '',
       price: price || 0,
       cost: cost || 0,

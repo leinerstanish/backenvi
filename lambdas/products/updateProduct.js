@@ -5,6 +5,7 @@ const variantRepository = require('../shared/variantRepository');
 const inventoryRepository = require('../shared/inventoryRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
+const { validateProductVideos } = require('../shared/productVideos');
 const { presentProduct } = require('../shared/auth');
 const { loadAttributeIndex, validateVariantSet, validateProductExtras, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
@@ -37,6 +38,10 @@ module.exports.handler = async (event) => {
       if (body[field] !== undefined) productUpdates[field] = body[field];
     });
     Object.assign(productUpdates, extras);
+
+    // Solo se tocan los videos si la petición los trae; sin el campo, quedan como estaban.
+    const videos = validateProductVideos(body.videos);
+    if (videos !== undefined) productUpdates.videos = videos;
 
     const currentFulfillment = existing.fulfillment || FULFILLMENT.STOCK;
     const nextFulfillment = extras.fulfillment || currentFulfillment;

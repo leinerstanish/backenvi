@@ -50,6 +50,7 @@ class ProductRepository {
       categoryId: productData.categoryId || null,
       brandId: productData.brandId || null,
       images: productData.images || [],
+      ...(productData.videos ? { videos: productData.videos } : {}),
       sku: productData.sku || '',
       price: productData.price || 0,
       cost: productData.cost || 0,
