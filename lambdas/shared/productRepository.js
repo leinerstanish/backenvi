@@ -54,6 +54,7 @@ class ProductRepository {
       virtualStoreImages: productData.virtualStoreImages || [],
       thumbnails: productData.thumbnails || {},
       cutouts: productData.cutouts || {},
+      ...(productData.model3d ? { model3d: productData.model3d } : {}),
       ...(productData.videos ? { videos: productData.videos } : {}),
       sku: productData.sku || '',
       price: productData.price || 0,
