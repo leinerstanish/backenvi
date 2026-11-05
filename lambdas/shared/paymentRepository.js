@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { scanAll } = require('./scanAll');
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1'
@@ -42,7 +43,7 @@ class PaymentRepository {
     // For a real production app with many payments, add a GSI on saleId.
     
     if (options.saleId) {
-      result = await docClient.send(new ScanCommand({
+      result = await scanAll(docClient, ({
         TableName: TABLE_NAME,
         FilterExpression: 'saleId = :saleId',
         ExpressionAttributeValues: {
@@ -50,7 +51,7 @@ class PaymentRepository {
         }
       }));
     } else {
-      result = await docClient.send(new ScanCommand({
+      result = await scanAll(docClient, ({
         TableName: TABLE_NAME
       }));
     }

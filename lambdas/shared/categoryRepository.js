@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand, UpdateCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+const { scanAll } = require('./scanAll');
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1'
@@ -36,7 +37,7 @@ class CategoryRepository {
   }
 
   async getAll() {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: TABLE_NAME
     }));
 
@@ -44,7 +45,7 @@ class CategoryRepository {
   }
 
   async getByParentId(parentId) {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: TABLE_NAME,
       FilterExpression: 'parentId = :parentId',
       ExpressionAttributeValues: {

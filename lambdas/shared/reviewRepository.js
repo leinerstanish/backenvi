@@ -2,6 +2,7 @@
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { scanAll } = require('./scanAll');
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1'
@@ -39,12 +40,12 @@ class ReviewRepository {
   }
 
   async getAll() {
-    const result = await docClient.send(new ScanCommand({ TableName: TABLE_NAME }));
+    const result = await scanAll(docClient, ({ TableName: TABLE_NAME }));
     return result.Items || [];
   }
 
   async getApprovedByProduct(productId) {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: TABLE_NAME,
       FilterExpression: 'productId = :p AND #s = :approved',
       ExpressionAttributeNames: { '#s': 'status' },
@@ -55,7 +56,7 @@ class ReviewRepository {
 
   /** Map productId -> { average, count } con las reseñas aprobadas. */
   async approvedSummaryByProduct() {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: TABLE_NAME,
       FilterExpression: '#s = :approved',
       ExpressionAttributeNames: { '#s': 'status' },

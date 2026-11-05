@@ -8,6 +8,7 @@ const productRepository = require('./productRepository');
 const locationRepository = require('./locationRepository');
 const { inventoryIdFor } = require('./inventoryKeys');
 const { loadAttributeIndex, normalizeVariantAttributes } = require('./catalogRules');
+const { scanAll } = require('./scanAll');
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1'
@@ -74,7 +75,7 @@ class InventoryRepository {
   async getAll(options = {}) {
     const { search, warehouseId, productId } = options;
 
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: INVENTORY_TABLE
     }));
 
@@ -138,7 +139,7 @@ class InventoryRepository {
   }
 
   async getByProductAndWarehouse(productId, warehouseId) {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: INVENTORY_TABLE,
       FilterExpression: 'productId = :productId AND warehouseId = :warehouseId',
       ExpressionAttributeValues: {
@@ -320,7 +321,7 @@ class InventoryRepository {
   }
 
   async getMovements(inventoryId) {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: MOVEMENTS_TABLE,
       FilterExpression: 'inventoryId = :inventoryId',
       ExpressionAttributeValues: {

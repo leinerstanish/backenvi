@@ -9,6 +9,7 @@ const { calculateShippingFee } = require('./pricing');
 const { assertTransition } = require('./orderStatus');
 const { flattenStockLines } = require('./comboRules');
 const { INVENTORY_TABLE, MOVEMENTS_TABLE, inventoryIdFor } = require('./inventoryKeys');
+const { scanAll } = require('./scanAll');
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1'
@@ -164,7 +165,7 @@ class SaleRepository {
   }
 
   async getAll() {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: TABLE_NAME
     }));
     return result.Items || [];
