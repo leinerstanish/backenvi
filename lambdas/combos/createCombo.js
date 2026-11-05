@@ -6,6 +6,7 @@ const s3Service = require('../shared/s3Service');
 const { presentProduct, isAdminRequest } = require('../shared/auth');
 const { HttpError, FULFILLMENT } = require('../shared/catalogRules');
 const { validateComponents, buildComboVariants } = require('../shared/comboRules');
+const { buildThumbnails } = require('../shared/productImages');
 
 const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Credentials': true };
 const response = (statusCode, body) => ({ statusCode, headers: CORS_HEADERS, body: JSON.stringify(body) });
@@ -43,6 +44,7 @@ module.exports.handler = async (event) => {
       categoryId: categoryId || null,
       brandId: brandId || null,
       images: uploadedImages,
+      thumbnails: await buildThumbnails(uploadedImages),
       components: validComponents
     }, comboVariants);
 

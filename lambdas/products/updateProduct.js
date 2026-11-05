@@ -6,6 +6,7 @@ const inventoryRepository = require('../shared/inventoryRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
 const { validateProductVideos } = require('../shared/productVideos');
+const { validateChannelImages, buildThumbnails, allProductImages, CHANNEL_FIELDS } = require('../shared/productImages');
 const { presentProduct } = require('../shared/auth');
 const { loadAttributeIndex, validateVariantSet, validateProductExtras, assertUniqueCombinations, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
@@ -64,6 +65,19 @@ module.exports.handler = async (event) => {
 
     if (productUpdates.images !== undefined) {
       productUpdates.images = await s3Service.processImages(productUpdates.images || [], 'products');
+    }
+
+    // Fotos por lugar: solo se tocan las listas que trae la petición
+    const channelImages = validateChannelImages(body);
+    for (const field of CHANNEL_FIELDS) {
+      if (channelImages[field] !== undefined) {
+        productUpdates[field] = await s3Service.processImages(channelImages[field], 'products');
+      }
+    }
+
+    // Si cambió alguna lista de fotos, se actualizan las miniaturas (las existentes se reutilizan)
+    if (productUpdates.images !== undefined || CHANNEL_FIELDS.some((f) => productUpdates[f] !== undefined)) {
+      productUpdates.thumbnails = await buildThumbnails(allProductImages({ ...existing, ...productUpdates }), existing.thumbnails);
     }
 
     if (variants !== undefined) {

@@ -87,3 +87,4 @@ class S3Service {
 }
 
 module.exports = new S3Service();
+module.exports.getS3Client = getS3Client;
