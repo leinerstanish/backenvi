@@ -178,7 +178,52 @@ function validateProductExtras(input) {
     out.sizeGuide = validateSizeGuide(input.sizeGuide);
   }
 
+  if (input.perfume !== undefined) {
+    out.perfume = validatePerfume(input.perfume);
+  }
+
   return out;
+}
+
+// ─── Perfumería ──────────────────────────────────────────────────────────
+// Datos del perfume que ve el cliente. La marca del producto es ENVI; el perfume de referencia va
+// en "inspiredBy" (para buscar y filtrar), nunca como marca. null quita el bloque.
+const PERFUME_GENDERS = ['Hombre', 'Mujer', 'Unisex', 'Infantil'];
+const PERFUME_FAMILIES = [
+  'Frutal', 'Floral', 'Dulce', 'Gourmand', 'Amaderada', 'Cítrica', 'Fresca', 'Aromática', 'Oriental',
+  'Avainillada', 'Especiada', 'Ámbar', 'Acuática', 'Herbal', 'Atalcada', 'Almizclada', 'Chipre', 'Cuero y tabaco',
+];
+
+function validatePerfume(input) {
+  if (input === null) return null;
+  if (!input || typeof input !== 'object') {
+    throw new HttpError(400, 'perfume debe ser un objeto o null');
+  }
+  const text = (value, max, field) => {
+    const s = String(value ?? '').trim();
+    if (s.length > max) throw new HttpError(400, `perfume.${field} admite máximo ${max} caracteres`);
+    return s;
+  };
+  const designer = text(input.inspiredBy?.designer, 80, 'inspiredBy.designer');
+  const fragrance = text(input.inspiredBy?.fragrance, 120, 'inspiredBy.fragrance');
+  if (!designer || !fragrance) {
+    throw new HttpError(400, 'perfume.inspiredBy requiere diseñador y fragancia');
+  }
+  if (!PERFUME_GENDERS.includes(input.gender)) {
+    throw new HttpError(400, `perfume.gender debe ser uno de: ${PERFUME_GENDERS.join(', ')}`);
+  }
+  const families = Array.isArray(input.families) ? [...new Set(input.families)] : [];
+  const unknown = families.filter((f) => !PERFUME_FAMILIES.includes(f));
+  if (unknown.length) {
+    throw new HttpError(400, `Familias olfativas no válidas: ${unknown.join(', ')}`);
+  }
+  return {
+    inspiredBy: { designer, fragrance },
+    gender: input.gender,
+    families: families.slice(0, 6),
+    description: text(input.description, 300, 'description'),
+    supplierCode: text(input.supplierCode, 30, 'supplierCode'),
+  };
 }
 
 // Guía de tallas por producto. Es visible para el cliente, así que no es un campo interno.
@@ -245,5 +290,8 @@ module.exports = {
   validateVariant,
   validateVariantSet,
   validateProductExtras,
+  validatePerfume,
   assertUniqueCombinations,
+  PERFUME_GENDERS,
+  PERFUME_FAMILIES,
 };

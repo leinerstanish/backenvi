@@ -64,6 +64,8 @@ class ProductRepository {
       supplierUrl: productData.supplierUrl || '',
       supplierLeadTimeDays: productData.supplierLeadTimeDays ?? null,
       internalNotes: productData.internalNotes || '',
+      ...(productData.sizeGuide ? { sizeGuide: productData.sizeGuide } : {}),
+      ...(productData.perfume ? { perfume: productData.perfume } : {}),
       createdAt: now,
       updatedAt: now
     };
