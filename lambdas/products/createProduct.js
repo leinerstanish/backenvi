@@ -4,7 +4,7 @@ const productRepository = require('../shared/productRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
 const { validateProductVideos } = require('../shared/productVideos');
-const { validateChannelImages, buildThumbnails, allProductImages } = require('../shared/productImages');
+const { validateChannelImages, buildThumbnails, buildCutouts, allProductImages, virtualStorePhotos } = require('../shared/productImages');
 const { loadAttributeIndex, validateVariantSet, validateProductExtras, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
@@ -44,6 +44,8 @@ module.exports.handler = async (event) => {
     const lookbookImages = await s3Service.processImages(channelImages.lookbookImages || [], 'products');
     const virtualStoreImages = await s3Service.processImages(channelImages.virtualStoreImages || [], 'products');
     const thumbnails = await buildThumbnails(allProductImages({ images: uploadedImages, lookbookImages, virtualStoreImages }));
+    // Recortes sin fondo de las fotos que muestra la tienda virtual
+    const cutouts = await buildCutouts(virtualStorePhotos({ images: uploadedImages, virtualStoreImages }));
     const variantsWithImages = await Promise.all(
       validVariants.map(async (v) => ({
         ...v,
@@ -62,6 +64,7 @@ module.exports.handler = async (event) => {
       lookbookImages,
       virtualStoreImages,
       thumbnails,
+      cutouts,
       ...(videos ? { videos } : {}),
       sku: sku || '',
       price: price || 0,

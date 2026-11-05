@@ -6,7 +6,7 @@ const inventoryRepository = require('../shared/inventoryRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
 const { validateProductVideos } = require('../shared/productVideos');
-const { validateChannelImages, buildThumbnails, allProductImages, CHANNEL_FIELDS } = require('../shared/productImages');
+const { validateChannelImages, buildThumbnails, buildCutouts, allProductImages, virtualStorePhotos, CHANNEL_FIELDS } = require('../shared/productImages');
 const { presentProduct } = require('../shared/auth');
 const { loadAttributeIndex, validateVariantSet, validateProductExtras, assertUniqueCombinations, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
@@ -78,6 +78,7 @@ module.exports.handler = async (event) => {
     // Si cambió alguna lista de fotos, se actualizan las miniaturas (las existentes se reutilizan)
     if (productUpdates.images !== undefined || CHANNEL_FIELDS.some((f) => productUpdates[f] !== undefined)) {
       productUpdates.thumbnails = await buildThumbnails(allProductImages({ ...existing, ...productUpdates }), existing.thumbnails);
+      productUpdates.cutouts = await buildCutouts(virtualStorePhotos({ ...existing, ...productUpdates }), existing.cutouts);
     }
 
     if (variants !== undefined) {
