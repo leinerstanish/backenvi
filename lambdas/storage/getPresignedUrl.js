@@ -5,6 +5,7 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 const { isAdminRequest } = require('../shared/auth');
 const { isVideoType, videoUploadKey } = require('../shared/productVideos');
+const { isModelType, modelUploadKey } = require('../shared/productModel3d');
 
 const s3Client = new S3Client({
   region: process.env.AWS_S3_REGION || 'us-east-2'
@@ -56,6 +57,32 @@ module.exports.handler = async (event) => {
       return response(200, {
         presignedUrl: videoUrl,
         fileKey: videoKey,
+        bucket: bucketName,
+        region: process.env.AWS_S3_REGION || 'us-east-2'
+      });
+    }
+
+    // Modelos 3D (GLB): solo administradores, con tamaño validado y firmado
+    if (isModelType(fileType)) {
+      if (!isAdminRequest(event)) {
+        return response(401, { error: 'Sesión de administrador requerida para subir modelos 3D' });
+      }
+      let modelKey;
+      try {
+        modelKey = modelUploadKey(fileSize);
+      } catch (error) {
+        return response(error.statusCode || 400, { error: error.message, message: error.message });
+      }
+      const modelCommand = new PutObjectCommand({
+        Bucket: bucketName,
+        Key: modelKey,
+        ContentType: fileType,
+        ContentLength: Number(fileSize),
+        CacheControl: 'public, max-age=31536000, immutable',
+      });
+      return response(200, {
+        presignedUrl: await getSignedUrl(s3Client, modelCommand, { expiresIn: 3600 }),
+        fileKey: modelKey,
         bucket: bucketName,
         region: process.env.AWS_S3_REGION || 'us-east-2'
       });

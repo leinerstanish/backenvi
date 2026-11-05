@@ -4,6 +4,8 @@ const productRepository = require('../shared/productRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
 const { validateProductVideos } = require('../shared/productVideos');
+const { validateProductModel } = require('../shared/productModel3d');
+const { validateChannelImages, buildThumbnails, buildCutouts, allProductImages, virtualStorePhotos } = require('../shared/productImages');
 const { loadAttributeIndex, validateVariantSet, validateProductExtras, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
 const CORS_HEADERS = {
@@ -28,6 +30,8 @@ module.exports.handler = async (event) => {
 
     const extras = validateProductExtras(body);
     const videos = validateProductVideos(body.videos);
+    const channelImages = validateChannelImages(body);
+    const model3d = validateProductModel(body.model3d);
     const fulfillment = extras.fulfillment || FULFILLMENT.STOCK;
 
     const index = await loadAttributeIndex();
@@ -38,6 +42,12 @@ module.exports.handler = async (event) => {
     }
 
     const uploadedImages = await s3Service.processImages(images || [], 'products');
+    // Fotos propias del lookbook y de la tienda virtual (vacías = usar las de la tienda)
+    const lookbookImages = await s3Service.processImages(channelImages.lookbookImages || [], 'products');
+    const virtualStoreImages = await s3Service.processImages(channelImages.virtualStoreImages || [], 'products');
+    const thumbnails = await buildThumbnails(allProductImages({ images: uploadedImages, lookbookImages, virtualStoreImages }));
+    // Recortes sin fondo de las fotos que muestra la tienda virtual
+    const cutouts = await buildCutouts(virtualStorePhotos({ images: uploadedImages, virtualStoreImages }));
     const variantsWithImages = await Promise.all(
       validVariants.map(async (v) => ({
         ...v,
@@ -53,6 +63,11 @@ module.exports.handler = async (event) => {
       categoryId: categoryId || null,
       brandId: brandId || null,
       images: uploadedImages,
+      lookbookImages,
+      virtualStoreImages,
+      thumbnails,
+      cutouts,
+      ...(model3d ? { model3d } : {}),
       ...(videos ? { videos } : {}),
       sku: sku || '',
       price: price || 0,

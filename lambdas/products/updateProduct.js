@@ -6,6 +6,8 @@ const inventoryRepository = require('../shared/inventoryRepository');
 const s3Service = require('../shared/s3Service');
 const locationRepository = require('../shared/locationRepository');
 const { validateProductVideos } = require('../shared/productVideos');
+const { validateProductModel } = require('../shared/productModel3d');
+const { validateChannelImages, buildThumbnails, buildCutouts, allProductImages, virtualStorePhotos, CHANNEL_FIELDS } = require('../shared/productImages');
 const { presentProduct } = require('../shared/auth');
 const { loadAttributeIndex, validateVariantSet, validateProductExtras, assertUniqueCombinations, FULFILLMENT, HttpError } = require('../shared/catalogRules');
 
@@ -43,6 +45,10 @@ module.exports.handler = async (event) => {
     const videos = validateProductVideos(body.videos);
     if (videos !== undefined) productUpdates.videos = videos;
 
+    // Modelo 3D: solo se toca si la petición lo trae (null lo quita)
+    const model3d = validateProductModel(body.model3d);
+    if (model3d !== undefined) productUpdates.model3d = model3d;
+
     const currentFulfillment = existing.fulfillment || FULFILLMENT.STOCK;
     const nextFulfillment = extras.fulfillment || currentFulfillment;
     const existingVariants = await variantRepository.getByProductId(productId);
@@ -64,6 +70,20 @@ module.exports.handler = async (event) => {
 
     if (productUpdates.images !== undefined) {
       productUpdates.images = await s3Service.processImages(productUpdates.images || [], 'products');
+    }
+
+    // Fotos por lugar: solo se tocan las listas que trae la petición
+    const channelImages = validateChannelImages(body);
+    for (const field of CHANNEL_FIELDS) {
+      if (channelImages[field] !== undefined) {
+        productUpdates[field] = await s3Service.processImages(channelImages[field], 'products');
+      }
+    }
+
+    // Si cambió alguna lista de fotos, se actualizan las miniaturas (las existentes se reutilizan)
+    if (productUpdates.images !== undefined || CHANNEL_FIELDS.some((f) => productUpdates[f] !== undefined)) {
+      productUpdates.thumbnails = await buildThumbnails(allProductImages({ ...existing, ...productUpdates }), existing.thumbnails);
+      productUpdates.cutouts = await buildCutouts(virtualStorePhotos({ ...existing, ...productUpdates }), existing.cutouts);
     }
 
     if (variants !== undefined) {

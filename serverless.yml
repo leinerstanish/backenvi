@@ -6,6 +6,8 @@ frameworkVersion: '3'
 
 plugins:
   - serverless-offline
+  # .serverless_plugins/sharp-linux.js: empaqueta sharp con binarios de Linux para las lambdas
+  - sharp-linux
 
 provider:
   name: aws
@@ -217,6 +219,8 @@ functions:
 
   productCreate:
     handler: lambdas/products/createProduct.handler
+    # Crea miniaturas de las fotos nuevas: necesita más que los 6 s por defecto
+    timeout: 28
     events:
       - http:
           path: products
@@ -241,6 +245,8 @@ functions:
 
   productUpdate:
     handler: lambdas/products/updateProduct.handler
+    # Crea miniaturas de las fotos nuevas: necesita más que los 6 s por defecto
+    timeout: 28
     events:
       - http:
           path: products/{productId}
@@ -701,6 +707,8 @@ functions:
 
   comboCreate:
     handler: lambdas/combos/createCombo.handler
+    # Crea miniaturas de las fotos nuevas: necesita más que los 6 s por defecto
+    timeout: 28
     events:
       - http:
           path: combos
@@ -709,6 +717,8 @@ functions:
 
   comboUpdate:
     handler: lambdas/combos/updateCombo.handler
+    # Crea miniaturas de las fotos nuevas: necesita más que los 6 s por defecto
+    timeout: 28
     events:
       - http:
           path: combos/{productId}

@@ -6,6 +6,7 @@ const s3Service = require('../shared/s3Service');
 const { presentProduct, isAdminRequest } = require('../shared/auth');
 const { HttpError } = require('../shared/catalogRules');
 const { validateComponents } = require('../shared/comboRules');
+const { buildThumbnails, buildCutouts } = require('../shared/productImages');
 
 const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Credentials': true };
 const response = (statusCode, body) => ({ statusCode, headers: CORS_HEADERS, body: JSON.stringify(body) });
@@ -29,6 +30,8 @@ module.exports.handler = async (event) => {
     EDITABLE_FIELDS.forEach((f) => { if (body[f] !== undefined) updates[f] = body[f]; });
     if (body.images !== undefined) {
       updates.images = await s3Service.processImages(body.images || [], 'products');
+      updates.thumbnails = await buildThumbnails(updates.images, existing.thumbnails);
+      updates.cutouts = await buildCutouts(updates.images, existing.cutouts);
     }
 
     if (body.components !== undefined) {
