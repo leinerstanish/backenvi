@@ -19,6 +19,8 @@
     "sharp": "0.33.5"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.1.1",
+    "@gradio/client": "^1.19.1",
     "serverless": "^3.40.0",
     "serverless-offline": "^13.2.0"
   }
