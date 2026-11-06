@@ -35,7 +35,12 @@ module.exports.handler = async (event) => {
     // La tienda solo ve lo que se puede vender; el admin ve todo.
     const admin = isAdminRequest(event);
 
+    // Línea del catálogo: ?line=perfume (perfumería) o ?line=fashion (moda). Sin el parámetro, todo.
+    const line = event.queryStringParameters?.line;
+    const inLine = (p) => (line === 'perfume' ? !!p.perfume : line === 'fashion' ? !p.perfume : true);
+
     const items = products
+      .filter(inLine)
       .map((p) => {
         const productVariants = variantsByProduct[p.productId] || [];
         return presentProduct(event, {

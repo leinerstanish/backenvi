@@ -16,6 +16,7 @@ const {
   VARIANTS_TABLE
 } = require('./catalogTransaction');
 const { INVENTORY_TABLE } = require('./inventoryKeys');
+const { scanAll } = require('./scanAll');
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1'
@@ -56,7 +57,7 @@ class VariantRepository {
 
   async getAll() {
     const [result, index, stockMap] = await Promise.all([
-      docClient.send(new ScanCommand({ TableName: VARIANTS_TABLE })),
+      scanAll(docClient, ({ TableName: VARIANTS_TABLE })),
       loadAttributeIndex(),
       this.#stockMap()
     ]);
@@ -74,7 +75,7 @@ class VariantRepository {
 
   async getByProductId(productId) {
     const [result, index, stockMap] = await Promise.all([
-      docClient.send(new ScanCommand({
+      scanAll(docClient, ({
         TableName: VARIANTS_TABLE,
         FilterExpression: 'productId = :productId',
         ExpressionAttributeValues: { ':productId': productId }
@@ -146,7 +147,7 @@ class VariantRepository {
   }
 
   async #inventoryRows(variantId) {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: INVENTORY_TABLE,
       FilterExpression: 'variantId = :variantId',
       ExpressionAttributeValues: { ':variantId': variantId }
@@ -155,7 +156,7 @@ class VariantRepository {
   }
 
   async #stockMap() {
-    const result = await docClient.send(new ScanCommand({ TableName: INVENTORY_TABLE }));
+    const result = await scanAll(docClient, ({ TableName: INVENTORY_TABLE }));
     const map = new Map();
     for (const row of result.Items || []) {
       if (!row.variantId) continue;

@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { scanAll } = require('./scanAll');
 const {
   DynamoDBDocumentClient,
   PutCommand,
@@ -61,8 +62,7 @@ class UserRepository {
   }
 
   async getAll() {
-    const result = await docClient.send(
-      new ScanCommand({
+    const result = await scanAll(docClient, ({
         TableName: TABLE_NAME,
       }),
     );
@@ -139,8 +139,7 @@ class UserRepository {
   }
 
   async findByEmail(email) {
-    const result = await docClient.send(
-      new ScanCommand({
+    const result = await scanAll(docClient, ({
         TableName: TABLE_NAME,
         FilterExpression: "email = :email",
         ExpressionAttributeValues: { ":email": email },

@@ -9,6 +9,7 @@ const client = new DynamoDBClient({
 });
 
 const { runTransaction, putProduct, putVariant, lockSku, initialInventoryRow, putInventoryRow } = require('./catalogTransaction');
+const { scanAll } = require('./scanAll');
 
 const docClient = DynamoDBDocumentClient.from(client);
 const TABLE_NAME = 'products_table';
@@ -63,6 +64,8 @@ class ProductRepository {
       supplierUrl: productData.supplierUrl || '',
       supplierLeadTimeDays: productData.supplierLeadTimeDays ?? null,
       internalNotes: productData.internalNotes || '',
+      ...(productData.sizeGuide ? { sizeGuide: productData.sizeGuide } : {}),
+      ...(productData.perfume ? { perfume: productData.perfume } : {}),
       createdAt: now,
       updatedAt: now
     };
@@ -124,7 +127,7 @@ class ProductRepository {
   }
 
   async getAll() {
-    const result = await docClient.send(new ScanCommand({
+    const result = await scanAll(docClient, ({
       TableName: TABLE_NAME
     }));
 
