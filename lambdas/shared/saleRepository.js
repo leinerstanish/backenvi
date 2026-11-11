@@ -49,7 +49,10 @@ class SaleRepository {
     });
 
     const tax = 0;
-    const shippingFee = calculateShippingFee(subtotal);
+    const shippingFee =
+      saleData.shippingFee !== undefined && saleData.shippingFee !== null && saleData.shippingFee !== ''
+        ? Math.max(0, parseFloat(saleData.shippingFee) || 0)
+        : calculateShippingFee(subtotal);
     const totalAmount = subtotal + shippingFee;
     const saleType = (saleData.saleType || 'CASH').toUpperCase();
     const initialPaymentAmount = parseFloat(saleData.initialPayment) || 0;
@@ -183,6 +186,10 @@ class SaleRepository {
     const sale = await this.getOne(saleId);
     if (!sale) return null;
 
+    if (to === 'CANCELLED' && (sale.status === 'CANCELLED' || sale.fulfillmentStatus === 'CANCELLED')) {
+      return sale;
+    }
+
     const from = sale.fulfillmentStatus || 'PENDING';
     assertTransition(from, to);
 
@@ -200,17 +207,19 @@ class SaleRepository {
     const event = { type: 'FULFILLMENT', from, to, note: note || '', by: actor, at: now };
 
     const updateNames = { '#fs': 'fulfillmentStatus', '#tl': 'timeline', '#u': 'updatedAt' };
-    const updateValues = { ':to': to, ':from': from, ':ev': [event], ':empty': [], ':now': now };
+    const updateValues = { ':to': to, ':ev': [event], ':empty': [], ':now': now };
     let updateExpression = 'SET #fs = :to, #tl = list_append(if_not_exists(#tl, :empty), :ev), #u = :now';
-    let condition = from === 'PENDING' ? '(attribute_not_exists(#fs) OR #fs = :from)' : '#fs = :from';
+    let condition = 'attribute_exists(saleId)';
 
-    if (awaitingPayment) {
-      // Cancelar un pedido sin pagar también cierra el cobro; un pago que llegue después queda marcado para reembolso.
+    if (to === 'CANCELLED') {
       updateNames['#st'] = 'status';
+      updateNames['#bd'] = 'balanceDue';
       updateValues[':cancelled'] = 'CANCELLED';
-      updateValues[':pending'] = 'PENDING_PAYMENT';
-      updateExpression += ', #st = :cancelled';
-      condition = `(${condition}) AND #st = :pending`;
+      updateValues[':zero'] = 0;
+      updateExpression += ', #st = :cancelled, #bd = :zero';
+    } else {
+      updateValues[':from'] = from;
+      condition = from === 'PENDING' ? '(attribute_not_exists(#fs) OR #fs = :from)' : '#fs = :from';
     }
 
     if (to === 'DELIVERED') {
@@ -234,16 +243,36 @@ class SaleRepository {
     }];
 
     if (to === 'CANCELLED') {
+      const groupedLines = new Map();
       for (const item of flattenStockLines(items)) {
+        const qty = Number(item.quantity) || 0;
+        if (qty <= 0 || !item.variantId || !item.locationId) continue;
         const inventoryId = inventoryIdFor(item.variantId, item.locationId);
+        const existing = groupedLines.get(inventoryId);
+        if (existing) {
+          existing.quantity += qty;
+        } else {
+          groupedLines.set(inventoryId, { ...item, quantity: qty, inventoryId });
+        }
+      }
+
+      for (const line of groupedLines.values()) {
+        const invCheck = await docClient.send(new GetCommand({
+          TableName: INVENTORY_TABLE,
+          Key: { id: line.inventoryId }
+        })).catch(() => ({ Item: null }));
+
+        if (!invCheck || !invCheck.Item) {
+          continue;
+        }
+
         transactItems.push({
           Update: {
             TableName: INVENTORY_TABLE,
-            Key: { id: inventoryId },
-            UpdateExpression: 'SET #q = #q + :qty, #a = #a + :qty, #u = :now',
-            ConditionExpression: 'attribute_exists(id)',
+            Key: { id: line.inventoryId },
+            UpdateExpression: 'SET #q = if_not_exists(#q, :zero) + :qty, #a = if_not_exists(#a, :zero) + :qty, #u = :now',
             ExpressionAttributeNames: { '#q': 'quantity', '#a': 'availableQuantity', '#u': 'updatedAt' },
-            ExpressionAttributeValues: { ':qty': item.quantity, ':now': now }
+            ExpressionAttributeValues: { ':qty': line.quantity, ':zero': 0, ':now': now }
           }
         });
         transactItems.push({
@@ -251,13 +280,13 @@ class SaleRepository {
             TableName: MOVEMENTS_TABLE,
             Item: {
               movementId: 'mov_' + crypto.randomBytes(12).toString('hex'),
-              inventoryId,
-              productId: item.productId,
-              variantId: item.variantId,
-              warehouseId: item.locationId,
+              inventoryId: line.inventoryId,
+              productId: line.productId,
+              variantId: line.variantId,
+              warehouseId: line.locationId,
               type: 'IN',
               reason: 'CANCELLATION',
-              quantity: item.quantity,
+              quantity: line.quantity,
               notes: `Cancelación venta ${saleId}`,
               createdAt: now
             }
@@ -326,7 +355,12 @@ class SaleRepository {
 
   async hasSalesForProduct(productId) {
     const sales = await this.getAll();
-    return sales.some((sale) => (sale.items || []).some((item) => item.productId === productId));
+    return sales.some(
+      (sale) =>
+        sale.status !== 'CANCELLED' &&
+        sale.fulfillmentStatus !== 'CANCELLED' &&
+        (sale.items || []).some((item) => item.productId === productId)
+    );
   }
 
   /** Marca pagada una venta PENDING_PAYMENT. Solo un llamado gana, así webhooks repetidos no duplican el pago. */
@@ -424,32 +458,125 @@ class SaleRepository {
   }
 
   async update(saleId, updates) {
+    if (updates && (updates.status === 'CANCELLED' || updates.fulfillmentStatus === 'CANCELLED')) {
+      return this.changeFulfillment(saleId, {
+        to: 'CANCELLED',
+        note: updates.notes || 'Cancelada desde administración',
+        actor: 'admin'
+      });
+    }
+
     const sale = await this.getOne(saleId);
     if (!sale) return null;
 
-    const allowedFields = ['notes', 'dueDate'];
-    const updateExpressions = [];
-    const expressionAttributeValues = {};
+    const now = new Date().toISOString();
+    const updateNames = { '#u': 'updatedAt' };
+    const updateValues = { ':updatedAt': now };
+    const sets = ['#u = :updatedAt'];
 
-    for (const [key, value] of Object.entries(updates)) {
-      if (allowedFields.includes(key)) {
-        updateExpressions.push(`${key} = :${key}`);
-        expressionAttributeValues[`:${key}`] = value;
-      }
+    if (updates.notes !== undefined) {
+      updateNames['#notes'] = 'notes';
+      updateValues[':notes'] = updates.notes;
+      sets.push('#notes = :notes');
     }
 
-    if (updateExpressions.length === 0) {
+    if (updates.dueDate !== undefined) {
+      updateNames['#dueDate'] = 'dueDate';
+      updateValues[':dueDate'] = updates.dueDate || null;
+      sets.push('#dueDate = :dueDate');
+    }
+
+    const hasFinancialChanges =
+      Array.isArray(updates.items) ||
+      updates.shippingFee !== undefined ||
+      updates.saleType !== undefined;
+
+    if (hasFinancialChanges) {
+      const currentItems = Array.isArray(sale.items) ? sale.items : [];
+      const nextItems = Array.isArray(updates.items)
+        ? currentItems.map((item, idx) => {
+            const patch = updates.items[idx] || {};
+            const price =
+              patch.price !== undefined && patch.price !== null
+                ? Math.max(0, parseFloat(patch.price) || 0)
+                : Number(item.price) || 0;
+            const quantity = Number(item.quantity) || 1;
+            return {
+              ...item,
+              price,
+              subtotal: price * quantity
+            };
+          })
+        : currentItems;
+
+      const nextSubtotal = nextItems.reduce(
+        (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+      const nextShippingFee =
+        updates.shippingFee !== undefined && updates.shippingFee !== null && updates.shippingFee !== ''
+          ? Math.max(0, parseFloat(updates.shippingFee) || 0)
+          : Number(sale.shippingFee) || 0;
+      const nextTotalAmount = nextSubtotal + nextShippingFee;
+      const nextSaleType = updates.saleType ? String(updates.saleType).toUpperCase() : (sale.saleType || 'CASH');
+
+      const payments = await paymentRepository.getAll({ saleId }).catch(() => []);
+      let nextBalanceDue = sale.balanceDue || 0;
+      let nextStatus = sale.status || 'PAID';
+
+      if (sale.status !== 'CANCELLED' && sale.fulfillmentStatus !== 'CANCELLED') {
+        if (nextSaleType === 'CASH' && sale.status !== 'PENDING_PAYMENT') {
+          nextBalanceDue = 0;
+          nextStatus = 'PAID';
+          if (payments.length === 1 && payments[0].paymentId) {
+            await paymentRepository.updateAmount(payments[0].paymentId, nextTotalAmount).catch(() => null);
+          }
+        } else {
+          const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+          nextBalanceDue = Math.max(0, nextTotalAmount - totalPaid);
+          if (sale.status !== 'PENDING_PAYMENT') {
+            nextStatus = nextBalanceDue === 0 ? 'PAID' : totalPaid > 0 ? 'PARTIAL' : 'PENDING';
+          }
+        }
+      }
+
+      updateNames['#items'] = 'items';
+      updateNames['#sub'] = 'subtotal';
+      updateNames['#ship'] = 'shippingFee';
+      updateNames['#tot'] = 'totalAmount';
+      updateNames['#bd'] = 'balanceDue';
+      updateNames['#st'] = 'status';
+      updateNames['#stype'] = 'saleType';
+
+      updateValues[':items'] = nextItems;
+      updateValues[':sub'] = nextSubtotal;
+      updateValues[':ship'] = nextShippingFee;
+      updateValues[':tot'] = nextTotalAmount;
+      updateValues[':bd'] = nextBalanceDue;
+      updateValues[':st'] = nextStatus;
+      updateValues[':stype'] = nextSaleType;
+
+      sets.push(
+        '#items = :items',
+        '#sub = :sub',
+        '#ship = :ship',
+        '#tot = :tot',
+        '#bd = :bd',
+        '#st = :st',
+        '#stype = :stype'
+      );
+    }
+
+    if (sets.length === 1) {
       return sale;
     }
-
-    updateExpressions.push('updatedAt = :updatedAt');
-    expressionAttributeValues[':updatedAt'] = new Date().toISOString();
 
     const result = await docClient.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { saleId },
-      UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-      ExpressionAttributeValues: expressionAttributeValues,
+      UpdateExpression: `SET ${sets.join(', ')}`,
+      ExpressionAttributeNames: updateNames,
+      ExpressionAttributeValues: updateValues,
       ReturnValues: 'ALL_NEW'
     }));
 

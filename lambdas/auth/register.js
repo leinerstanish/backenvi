@@ -2,6 +2,7 @@
 
 const jwt = require('jsonwebtoken');
 const userRepository = require('../shared/userRepository');
+const { isAdminRequest } = require('../shared/auth');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -16,6 +17,12 @@ const response = (statusCode, body) => ({
 
 module.exports.handler = async (event) => {
   try {
+    if (!isAdminRequest(event)) {
+      return response(403, {
+        error: 'El registro público está deshabilitado. Los usuarios solo pueden ser creados desde el panel de administración.'
+      });
+    }
+
     const { email, firstName, lastName, password } = JSON.parse(event.body || '{}');
 
     if (!email || !password) {

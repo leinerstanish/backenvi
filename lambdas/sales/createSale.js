@@ -31,6 +31,7 @@ module.exports.handler = async (event) => {
       saleType,
       initialPayment,
       paymentMethod,
+      shippingFee,
       dueDate,
       notes
     } = body;
@@ -97,6 +98,7 @@ module.exports.handler = async (event) => {
       saleType: saleType || 'CASH',
       initialPayment: initialPayment || 0,
       paymentMethod: paymentMethod || 'CASH',
+      shippingFee,
       dueDate: dueDate || null,
       notes: notes || ''
     });

@@ -7,14 +7,17 @@ const FULFILLMENT_STATUSES = ['PENDING', 'PREPARING', 'SHIPPED', 'DELIVERED', 'C
 const TRANSITIONS = {
   PENDING: ['PREPARING', 'CANCELLED'],
   PREPARING: ['SHIPPED', 'CANCELLED'],
-  SHIPPED: ['DELIVERED'],
-  DELIVERED: [],
+  SHIPPED: ['DELIVERED', 'CANCELLED'],
+  DELIVERED: ['CANCELLED'],
   CANCELLED: []
 };
 
 function assertTransition(from, to) {
   if (!FULFILLMENT_STATUSES.includes(to)) {
     throw new HttpError(400, `Estado inválido: ${to}`);
+  }
+  if (to === 'CANCELLED' && from !== 'CANCELLED') {
+    return;
   }
   if (!(TRANSITIONS[from] || []).includes(to)) {
     throw new HttpError(409, `No se puede pasar de ${from} a ${to}`);

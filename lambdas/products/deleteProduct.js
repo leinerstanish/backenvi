@@ -25,15 +25,10 @@ module.exports.handler = async (event) => {
     }
 
     if (await saleRepository.hasSalesForProduct(productId)) {
-      return response(409, { error: 'No se puede eliminar: el producto tiene ventas registradas' });
+      return response(409, { error: 'No se puede eliminar: el producto tiene ventas activas registradas' });
     }
 
     const variants = await variantRepository.getByProductId(productId);
-    for (const variant of variants) {
-      if ((await variantRepository.stockOf(variant.variantId)) > 0) {
-        return response(409, { error: 'El producto tiene unidades en inventario. Ajusta el stock a 0 antes de eliminarlo' });
-      }
-    }
     for (const variant of variants) {
       await variantRepository.delete(variant.variantId);
     }

@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { scanAll } = require('./scanAll');
 
 const client = new DynamoDBClient({
@@ -66,6 +66,20 @@ class PaymentRepository {
     }));
 
     return result.Item || null;
+  }
+
+  async updateAmount(paymentId, amount) {
+    const result = await docClient.send(new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { paymentId },
+      UpdateExpression: 'SET amount = :amount, updatedAt = :now',
+      ExpressionAttributeValues: {
+        ':amount': Math.max(0, parseFloat(amount) || 0),
+        ':now': new Date().toISOString()
+      },
+      ReturnValues: 'ALL_NEW'
+    }));
+    return result.Attributes;
   }
 }
 
