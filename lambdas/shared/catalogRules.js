@@ -277,7 +277,7 @@ function validateSizeGuide(input) {
  * si no, un producto sin variantes no se puede vender todavía.
  */
 function productStatus(product, variantCount) {
-  if (product.status && product.status !== 'ACTIVE') return product.status;
+  if (product.status && product.status !== 'ACTIVE' && product.status !== 'PENDING_VARIANTS') return product.status;
   return variantCount > 0 ? 'ACTIVE' : 'PENDING_VARIANTS';
 }
 
